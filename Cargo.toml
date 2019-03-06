@@ -5,3 +5,6 @@ authors = ["Alejandro Alvarado <alejalvarado@paypal.com>"]
 edition = "2018"
 
 [dependencies]
+chrono = "0.4"
+itertools = "0.8"
+time = "0.1"
