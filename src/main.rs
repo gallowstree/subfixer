@@ -27,20 +27,20 @@ fn main() -> Result<()> {
 fn consume_parsing_entries(lines: &mut Lines<BufReader<File>>) -> Option<Subtitle> {
     match lines.next() {
         Some(Ok(index_line)) => {
-            let index = extract_index(&index_line);
-            let time_marks = extract_start_end_times(&lines.next()?.unwrap());
-            let subtitle_text_lines = extract_text(lines);
-            Some(Subtitle {index, start_time: time_marks.0, end_time: time_marks.1, subtitle_text_lines})
+            let index = parse_index(&index_line);
+            let time_marks = parse_start_end_times(&lines.next()?.unwrap());
+            let subtitle_text = next_text_block(lines);
+            Some(Subtitle {index, start_time: time_marks.0, end_time: time_marks.1, subtitle_text})
         },
         _ => None
     }
 }
 
-fn extract_index(line: &str) -> u32 {
+fn parse_index(line: &str) -> u32 {
     line.trim().parse::<u32>().expect("malformed file: missing index")
 }
 
-fn extract_start_end_times(line: &str) -> (Duration, Duration) {
+fn parse_start_end_times(line: &str) -> (Duration, Duration) {
     line.split("-->")
         .map(|x| x.trim())
         .map(|time_str| NaiveTime::parse_from_str(time_str, "%H:%M:%S,%f").unwrap())
@@ -53,7 +53,7 @@ fn extract_start_end_times(line: &str) -> (Duration, Duration) {
         .next().unwrap()
 }
 
-fn extract_text(lines: &mut Lines<BufReader<File>>) -> Vec<String> {
+fn next_text_block(lines: &mut Lines<BufReader<File>>) -> Vec<String> {
     let mut text_lines: Vec<String> = Vec::new();
 
     while let Some(Ok(line)) = lines.next() {
@@ -71,13 +71,13 @@ struct Subtitle {
     index: u32,
     start_time: Duration,
     end_time: Duration,
-    subtitle_text_lines: Vec<String>
+    subtitle_text: Vec<String>
 }
 
 impl Subtitle {
     fn offset_by(self, duration: Duration) -> Subtitle {
         let new_start = self.start_time.add(duration);
         let new_end = self.end_time.add(duration);
-        Subtitle {index: self.index, start_time: new_start, end_time: new_end, subtitle_text_lines: self.subtitle_text_lines}
+        Subtitle {index: self.index, start_time: new_start, end_time: new_end, subtitle_text: self.subtitle_text}
     }
 }
