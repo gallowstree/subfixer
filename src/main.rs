@@ -53,9 +53,9 @@ fn parse_subtitle(lines: &mut Lines<BufReader<File>>) -> Option<Subtitle> {
 fn parse_start_end_times(line: &str) -> (NaiveTime, NaiveTime) {
     line.split("-->")
         .map(|x| x.trim())
-        .map(|time_str| NaiveTime::parse_from_str(time_str, TIME_FORMAT).unwrap())
+        .map(|time_str| NaiveTime::parse_from_str(time_str, TIME_FORMAT).expect("Invalid time format"))
         .tuple_windows::<(_, _)>()
-        .next().unwrap()
+        .next().expect("Malformed time marks")
 }
 
 fn next_text_block(lines: &mut Lines<BufReader<File>>) -> Vec<String> {
@@ -83,6 +83,7 @@ impl Subtitle {
     fn offset_by(self, duration: Duration) -> Subtitle {
         let new_start = self.start_time.add(duration);
         let new_end = self.end_time.add(duration);
+
         Subtitle {index: self.index, start_time: new_start, end_time: new_end, subtitle_text: self.subtitle_text}
     }
 
