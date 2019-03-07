@@ -1,19 +1,19 @@
+extern crate time;
 extern crate chrono;
 
 use itertools::Itertools;
 use std::fs::File;
-use time::Duration;
 use std::ops::Add;
-
 use std::io::{BufRead, BufReader, Result, Lines};
-use chrono::{NaiveTime, Timelike};
-use chrono::format::{Parsed, parse};
-use chrono::format::StrftimeItems;
+
+use chrono::{Timelike};
+use chrono::NaiveTime;
+use time::Duration;
 
 fn main() -> Result<()> {
     let file = File::open("sample.srt")?;
     let reader = BufReader::new(file);
-    let offset_by = Duration {secs: 1, nanos: 1};
+    let offset_by = Duration::milliseconds(1001);
 
     let subtitle_entries = reader.lines()
         .batching(|lines| {
@@ -27,7 +27,6 @@ fn main() -> Result<()> {
         .for_each(|e| println!("{:?}", e));
 
 
-
     Ok(())
 }
 
@@ -38,12 +37,13 @@ fn extract_index(line: &str) -> u32 {
 fn extract_start_end_times(line: &str) -> (Duration, Duration) {
     line.split("-->")
         .map(|x| x.trim())
-        .map(|time_str| {
-            let mut parsed = Parsed::new();
-            parse(&mut parsed, time, StrftimeItems::new("%H:%M:%S,%f"));
-            parsed
+        .map(|time_str| NaiveTime::parse_from_str(time_str, "%H:%M:%S,%f").unwrap())
+        .map(|parsed_time| {
+            let secs = parsed_time.hour() * 3600 + parsed_time.minute() * 60 + parsed_time.second();
+            let secs: i64 = secs.into();
+            let nanos = parsed_time.nanosecond() as i64;
+            Duration::seconds(secs).add(Duration::nanoseconds(nanos))
         })
-        .map(|parsed_time| Duration {secs: time.hour(), nanos: time.})
         .tuple_windows::<(_, _)>()
         .next().unwrap()
 }
@@ -51,7 +51,7 @@ fn extract_start_end_times(line: &str) -> (Duration, Duration) {
 fn extract_text(lines: &mut Lines<BufReader<File>>) -> Vec<String> {
     let mut text_lines: Vec<String> = Vec::new();
 
-    while let Ok(line) = lines.next().unwrap() {
+    while let Some(Ok(line)) = lines.next() {
         match line.as_ref() {
             "" => break,
             line => text_lines.push(String::from(line))
