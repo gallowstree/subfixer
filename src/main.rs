@@ -13,21 +13,27 @@ use time::Duration;
 fn main() -> Result<()> {
     let file = File::open("sample.srt")?;
     let reader = BufReader::new(file);
-    let offset_by = Duration::milliseconds(1001);
+    let offset_duration = Duration::milliseconds(1001);
 
     let subtitle_entries = reader.lines()
-        .batching(|lines| {
-
-            let index = extract_index(&lines.next().unwrap().unwrap());
-            let time_marks = extract_start_end_times(&lines.next().unwrap().unwrap());
-            let subtitle_text_lines = extract_text(lines);
-
-            Some(Entry {index, start_time: time_marks.0, end_time: time_marks.1, subtitle_text_lines}) })
-        .map(|entry| entry.offset_by(offset_by))
+        .batching(|lines| consume_parsing_entries(lines))
+        .map(|sub_entry| sub_entry.offset_by(offset_duration))
         .for_each(|e| println!("{:?}", e));
 
 
     Ok(())
+}
+
+fn consume_parsing_entries(lines: &mut Lines<BufReader<File>>) -> Option<Subtitle> {
+    match lines.next() {
+        Some(Ok(index_line)) => {
+            let index = extract_index(&index_line);
+            let time_marks = extract_start_end_times(&lines.next()?.unwrap());
+            let subtitle_text_lines = extract_text(lines);
+            Some(Subtitle {index, start_time: time_marks.0, end_time: time_marks.1, subtitle_text_lines})
+        },
+        _ => None
+    }
 }
 
 fn extract_index(line: &str) -> u32 {
@@ -40,9 +46,8 @@ fn extract_start_end_times(line: &str) -> (Duration, Duration) {
         .map(|time_str| NaiveTime::parse_from_str(time_str, "%H:%M:%S,%f").unwrap())
         .map(|parsed_time| {
             let secs = parsed_time.hour() * 3600 + parsed_time.minute() * 60 + parsed_time.second();
-            let secs: i64 = secs.into();
             let nanos = parsed_time.nanosecond() as i64;
-            Duration::seconds(secs).add(Duration::nanoseconds(nanos))
+            Duration::seconds(secs as i64).add(Duration::nanoseconds(nanos))
         })
         .tuple_windows::<(_, _)>()
         .next().unwrap()
@@ -62,17 +67,17 @@ fn extract_text(lines: &mut Lines<BufReader<File>>) -> Vec<String> {
 }
 
 #[derive(Debug)]
-struct Entry {
+struct Subtitle {
     index: u32,
     start_time: Duration,
     end_time: Duration,
     subtitle_text_lines: Vec<String>
 }
 
-impl Entry {
-    fn offset_by(self, duration: Duration) -> Entry {
+impl Subtitle {
+    fn offset_by(self, duration: Duration) -> Subtitle {
         let new_start = self.start_time.add(duration);
         let new_end = self.end_time.add(duration);
-        Entry {index: self.index, start_time: new_start, end_time: new_end, subtitle_text_lines: self.subtitle_text_lines}
+        Subtitle {index: self.index, start_time: new_start, end_time: new_end, subtitle_text_lines: self.subtitle_text_lines}
     }
 }
