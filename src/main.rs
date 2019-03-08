@@ -1,25 +1,27 @@
-extern crate time;
 extern crate chrono;
+extern crate time;
 
 use itertools::Itertools;
 use std::fs::File;
+use std::io::{BufRead, BufReader, Lines, Result};
 use std::ops::Add;
-use std::io::{BufRead, BufReader, Result, Lines};
 
 use chrono::NaiveTime;
-use time::Duration;
-use std::io::Write;
 use std::env;
+use std::io::Write;
+use time::Duration;
 
 const TIME_FORMAT: &str = "%H:%M:%S,%3f";
 
 fn main() -> Result<()> {
-    let args:Vec<String> = env::args().collect();
+    let args: Vec<String> = env::args().collect();
 
     let input_file_path = args.get(1).expect("Missing input file");
     let output_file_path = args.get(2).expect("Missing output file");
 
-    let offset_millis = args.get(3).expect("Missing offset millis")
+    let offset_millis = args
+        .get(3)
+        .expect("Missing offset millis")
         .parse::<i64>()
         .expect("Invalid offset millis");
 
@@ -28,13 +30,16 @@ fn main() -> Result<()> {
     let reader = BufReader::new(file);
     let offset_duration = Duration::milliseconds(offset_millis);
 
-    let offset_entries = reader.lines()
+    let offset_entries = reader
+        .lines()
         .batching(|lines| parse_subtitle(lines))
         .inspect(|s| println!("{:?}", s))
         .map(|sub_entry| sub_entry.offset_by(offset_duration));
 
     for e in offset_entries {
-        output_file.write_all(e.to_srt_format().as_ref()).expect("Failed to write")
+        output_file
+            .write_all(e.to_srt_format().as_ref())
+            .expect("Failed to write")
     }
 
     Ok(())
@@ -43,22 +48,36 @@ fn main() -> Result<()> {
 fn parse_subtitle(lines: &mut Lines<BufReader<File>>) -> Option<Subtitle> {
     match lines.next()? {
         Ok(ref index) if !index.is_empty() => {
-            let index = index.trim().parse::<u32>().expect(&format!("invalid index {}", index));
-            let time_marks = lines.next()?.expect(&format!("malformed file: missing time marks at index {}", index));
+            let index = index
+                .trim()
+                .parse::<u32>()
+                .expect(&format!("invalid index {}", index));
+            let time_marks = lines.next()?.expect(&format!(
+                "malformed file: missing time marks at index {}",
+                index
+            ));
             let time_marks = parse_start_end_times(&time_marks);
             let subtitle_text = next_text_block(lines);
-            Some(Subtitle {index, start_time: time_marks.0, end_time: time_marks.1, subtitle_text})
-        },
-        _ => None
+            Some(Subtitle {
+                index,
+                start_time: time_marks.0,
+                end_time: time_marks.1,
+                subtitle_text,
+            })
+        }
+        _ => None,
     }
 }
 
 fn parse_start_end_times(line: &str) -> (NaiveTime, NaiveTime) {
     line.split("-->")
         .map(|x| x.trim())
-        .map(|time_str| NaiveTime::parse_from_str(time_str, TIME_FORMAT).expect("Invalid time format"))
+        .map(|time_str| {
+            NaiveTime::parse_from_str(time_str, TIME_FORMAT).expect("Invalid time format")
+        })
         .tuple_windows::<(_, _)>()
-        .next().expect("Malformed time marks")
+        .next()
+        .expect("Malformed time marks")
 }
 
 fn next_text_block(lines: &mut Lines<BufReader<File>>) -> Vec<String> {
@@ -67,9 +86,9 @@ fn next_text_block(lines: &mut Lines<BufReader<File>>) -> Vec<String> {
     while let Some(Ok(line)) = lines.next() {
         match line.as_ref() {
             "" => break,
-            line => text_lines.push(String::from(line))
+            line => text_lines.push(String::from(line)),
         }
-    };
+    }
 
     text_lines
 }
@@ -79,7 +98,7 @@ struct Subtitle {
     index: u32,
     start_time: NaiveTime,
     end_time: NaiveTime,
-    subtitle_text: Vec<String>
+    subtitle_text: Vec<String>,
 }
 
 impl Subtitle {
@@ -87,7 +106,12 @@ impl Subtitle {
         let new_start = self.start_time.add(duration);
         let new_end = self.end_time.add(duration);
 
-        Subtitle {index: self.index, start_time: new_start, end_time: new_end, subtitle_text: self.subtitle_text}
+        Subtitle {
+            index: self.index,
+            start_time: new_start,
+            end_time: new_end,
+            subtitle_text: self.subtitle_text,
+        }
     }
 
     fn to_srt_format(&self) -> String {
