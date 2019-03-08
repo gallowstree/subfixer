@@ -14,21 +14,23 @@ use std::env;
 const TIME_FORMAT: &str = "%H:%M:%S,%3f";
 
 fn main() -> Result<()> {
-    let input_file_path = env::args().next().expect("Missing input file");
-    let output_file_path = env::args().next().expect("Missing output file");
+    let args:Vec<String> = env::args().collect();
 
-    let offset_millis = env::args().next()
-        .expect("Missing offset millis")
+    let input_file_path = args.get(1).expect("Missing input file");
+    let output_file_path = args.get(2).expect("Missing output file");
+
+    let offset_millis = args.get(3).expect("Missing offset millis")
         .parse::<i64>()
         .expect("Invalid offset millis");
 
-    let file = File::open(input_file_path)?;
-    let mut output_file = File::create(output_file_path)?;
+    let file = File::open(input_file_path).expect("Can't open input file");
+    let mut output_file = File::create(output_file_path).expect("Can't create output file");
     let reader = BufReader::new(file);
     let offset_duration = Duration::milliseconds(offset_millis);
 
     let offset_entries = reader.lines()
         .batching(|lines| parse_subtitle(lines))
+        .inspect(|s| println!("{:?}", s))
         .map(|sub_entry| sub_entry.offset_by(offset_duration));
 
     for e in offset_entries {
@@ -39,10 +41,11 @@ fn main() -> Result<()> {
 }
 
 fn parse_subtitle(lines: &mut Lines<BufReader<File>>) -> Option<Subtitle> {
-    match lines.next() {
-        Some(Ok(index_line)) => {
-            let index = index_line.trim().parse::<u32>().expect("malformed file: missing index");
-            let time_marks = parse_start_end_times(&lines.next()?.expect(format!("malformed file: missing time marks at index {}", index).as_ref()));
+    match lines.next()? {
+        Ok(ref index) if !index.is_empty() => {
+            let index = index.trim().parse::<u32>().expect(&format!("invalid index {}", index));
+            let time_marks = lines.next()?.expect(&format!("malformed file: missing time marks at index {}", index));
+            let time_marks = parse_start_end_times(&time_marks);
             let subtitle_text = next_text_block(lines);
             Some(Subtitle {index, start_time: time_marks.0, end_time: time_marks.1, subtitle_text})
         },
@@ -95,5 +98,4 @@ impl Subtitle {
 
         format!("{}\n{}\n{}\n\n", self.index, formatted_time_marks, lines)
     }
-
 }
